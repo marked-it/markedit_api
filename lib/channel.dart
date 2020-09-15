@@ -1,81 +1,74 @@
-import 'package:markedit_api/controller/identity_controller.dart';
-import 'package:markedit_api/controller/register_controller.dart';
-import 'package:markedit_api/controller/user_controller.dart';
-import 'package:markedit_api/model/user.dart';
-import 'package:markedit_api/utility/html_template.dart';
 import 'package:markedit_api/markedit_api.dart';
 
-/// This type initializes an application.
-///
-/// Override methods in this class to set up routes and initialize services like
-/// database connections. See http://aqueduct.io/docs/http/channel/.
-class MarkeditApiChannel extends ApplicationChannel
-    implements AuthRedirectControllerDelegate {
-  final HTMLRenderer htmlRenderer = HTMLRenderer();
+/// This handles the [ApplicationChannel] for the Genie API
+class MarkeditApiChannel extends ApplicationChannel {
+  // The instance of the AuthServer that handles all authentication
   AuthServer authServer;
+
+  // The context of the application
   ManagedContext context;
 
-  /// Initialize services in this method.
-  ///
-  /// Implement this method to initialize services, read values from [options]
-  /// and any other initialization required before constructing [entryPoint].
-  ///
-  /// This method is invoked prior to [entryPoint] being accessed.
+  // The API Configuration file
+  MarkeditApiConfiguration _config;
+
+  // Prepare the application, configure the logger, config, and AuthServer
   @override
   Future prepare() async {
-    logger.onRecord.listen(
-        (rec) => print("$rec ${rec.error ?? ""} ${rec.stackTrace ?? ""}"));
+    // Setup the logger
+    logger.onRecord.listen((rec) =>
+        print("$rec ${rec.error ?? ""} ${rec.stackTrace ?? ""}"));
 
-    final config = MarkeditApiConfiguration(options.configurationFilePath);
+    // Load the application configuration
+    _config = MarkeditApiConfiguration(options.configurationFilePath);
 
-    context = contextWithConnectionInfo(config.database);
+    // Create the application context using the info from the configuration
+    context = contextWithConnectionInfo(_config.database);
 
-    final authStorage = ManagedAuthDelegate<User>(context);
+    // Configure the AuthServer
+    final authStorage = ManagedAuthDelegate<User>(context, tokenLimit: 10);
     authServer = AuthServer(authStorage);
   }
 
-  /// Construct the request channel.
-  ///
-  /// Return an instance of some [Controller] that will be the initial receiver
-  /// of all [Request]s.
-  ///
-  /// This method is invoked after [prepare].
+  // Handle all the routes in the router
   @override
   Controller get entryPoint {
     final router = Router();
 
-    /* OAuth 2.0 Endpoints */
-    router.route("/auth/token").link(() => AuthController(authServer));
+    // Display the ApiDocs on the root of the API
+    router.route("/").linkFunction((request) async {
+      final _docs = File("client.html");
+      return Response.ok(_docs.openRead())
+        ..encodeBody = false
+        ..contentType = ContentType.html;
+    });
 
-    router
-        .route("/auth/form")
-        .link(() => AuthRedirectController(authServer, delegate: this));
-
-    /* Create an account */
-    router
-        .route("/register")
-        .link(() => Authorizer.basic(authServer))
+    // Create an account on the system
+    router.route("/register")
         .link(() => RegisterController(context, authServer));
 
-    /* Gets profile for user with bearer token */
-    router
-        .route("/me")
+    // Handles logging into the system
+    router.route("/auth/token")
+        .link(() => AuthController(authServer));
+
+    // Handles resetting user account passwords
+    router.route("/reset-password/[:token]")
+        .link(() => PasswordResetController(context, authServer, _config));
+
+    // Returns the currently logged in users information
+    router.route("/me")
         .link(() => Authorizer.bearer(authServer))
         .link(() => IdentityController(context));
 
-    /* Gets all users or one specific user by id */
-    router
-        .route("/users/[:id]")
+    // Handles all the users routes
+    router.route("/users/[:id([0-9]+)]")
         .link(() => Authorizer.bearer(authServer))
         .link(() => UserController(context, authServer));
 
+    // Return the built router
     return router;
   }
 
-  /*
-   * Helper methods
-   */
-
+  /// Create the [ManagedContext] that is used to define connections within the application.
   ManagedContext contextWithConnectionInfo(
       DatabaseConfiguration connectionInfo) {
     final dataModel = ManagedDataModel.fromCurrentMirrorSystem();
@@ -88,33 +81,4 @@ class MarkeditApiChannel extends ApplicationChannel
 
     return ManagedContext(dataModel, psc);
   }
-
-  @override
-  Future<String> render(AuthRedirectController forController, Uri requestUri,
-      String responseType, String clientID, String state, String scope) async {
-    final map = {
-      "response_type": responseType,
-      "client_id": clientID,
-      "state": state
-    };
-
-    map["path"] = requestUri.path;
-    if (scope != null) {
-      map["scope"] = scope;
-    }
-
-    return htmlRenderer.renderHTML("web/login.html", map);
-  }
-}
-
-/// An instance of this class represents values from a configuration
-/// file specific to this application.
-///
-/// Configuration files must have key-value for the properties in this class.
-/// For more documentation on configuration files, see
-/// https://pub.dartlang.org/packages/safe_config.
-class MarkeditApiConfiguration extends Configuration {
-  MarkeditApiConfiguration(String fileName) : super.fromFile(File(fileName));
-
-  DatabaseConfiguration database;
 }

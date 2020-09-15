@@ -1,26 +1,19 @@
 import 'package:markedit_api/markedit_api.dart';
 
-class User extends ManagedObject<_User>
-    implements _User, ManagedAuthResourceOwner<_User> {
+class User extends ManagedObject<_User> implements _User, ManagedAuthResourceOwner<_User> {
   @Serialize(input: true, output: false)
   String password;
 }
 
 class _User extends ResourceOwnerTableDefinition {
-/* This class inherits the following from ManagedAuthenticatable:
+  @Column()
+  String firstName;
 
-  @primaryKey
-  int id;
+  @Column()
+  String lastName;
 
-  @Column(unique: true, indexed: true)
-  String username;
+  @Column(unique: true)
+  String email;
 
-  @Column(omitByDefault: true)
-  String hashedPassword;
-
-  @Column(omitByDefault: true)
-  String salt;
-
-  ManagedSet<ManagedAuthToken> tokens;
- */
+  ManagedSet<PasswordResetToken> passwordResetTokens;
 }

@@ -16,3 +16,18 @@ threads: 4
 
 # The port the API is served on
 port: 8888
+
+# Configuration settings for the SMTP Server Connection
+smtpServer:
+ # SMTP server hostname or IP address
+ host: some.domain.com
+ # SMTP server port
+ port: 465
+ # SMTP server username
+ username: something@example.com
+ # SMTP server password
+ password: somepassword
+ # OPTIONAL(defaults to false): Ignore bad SSL certificates on the SMTP server
+ ignoreBadCertificates: false
+ # Optional(defaults to true): Use SSL to connect to the SMTP server
+ useSSL: true
